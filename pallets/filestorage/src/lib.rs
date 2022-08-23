@@ -24,7 +24,9 @@ pub mod pallet {
 	};
 	// use url::Url;
 	use hex_literal;
-
+	// use frame_support::traits::tokens::Balance;
+    // pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
+	use frame_system::Origin;
 
   #[cfg(feature = "std")]
 	use frame_support::serde::{Deserialize, Serialize};
@@ -32,6 +34,7 @@ pub mod pallet {
 	type AccountOf<T> = <T as frame_system::Config>::AccountId;
 	type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	type Balance = u32;
 
 
   // Struct for holding File information.
@@ -43,7 +46,7 @@ pub mod pallet {
 		pub file_type : FileType,
 		pub file_link: BoundedVec<u8, T::MaxLength>,
 		pub allow_download :bool,
-		pub file_size : u32,
+		pub file_size : u64,
 	}
 
 	 // Set FileType type in File struct.
@@ -80,8 +83,18 @@ pub mod pallet {
 	#[pallet::constant]
 	type MaxLength: Get<u32>;
 
+	// type Balance = u32;
+
+	/// the maximum file size allowed free of cost
+	// #[pallet::constant]
+	// const ALLOWD_SIZE_///FREE:u64 = 250;
+
+	/// the rate of fee to be charged on excess size
+	// #[pallet::constant]
+    // const RATE_PER_UNIT:u64 = 5;
+
 	/// max length of vector of owners of a file
-	// type MaxLengthOwners: Get<Self::Hash>;
+	// type MaxLengthOwners: Get<u32>;
 
 	/// The type of Randomness we want to specify for this pallet.
 	type KittyRandomness: Randomness<Self::Hash, Self::BlockNumber>;
@@ -99,6 +112,8 @@ pub mod pallet {
 	FileDownloaded {cid: T::Hash, count: u64},
 	///Event ownership changed
 	FileOwnerChanged {cid: T::Hash, new_owner: T::AccountId},
+	///display the cost to user in event 
+	CostToUser {cid: T::Hash, user: T::AccountId, cost: u64},
   }
   
   
@@ -116,6 +131,8 @@ pub mod pallet {
 	SenderIsNotOwner,
 	///file download not allowed at the time of upload
 	FileNotDownloadable,
+	///low balance
+	NotEnoughBalance,
   }
 
   #[pallet::storage]
@@ -158,38 +175,28 @@ pub mod pallet {
 		u64,
 		ValueQuery,
 	>;
+	
 
 	#[pallet::storage]
 	#[pallet::getter(fn file_downloaders)]
 	/// Keeps track of what accounts downloaded a file
-	pub(super) type FileDownloaders<T: Config> = StorageMap<
+	pub(super) type FileDownloaders<T: Config> = StorageDoubleMap<
 		_,
-		Twox64Concat,
-		[u64;32],
-		(T::AccountId, T::Hash, u64),
-		// ValueQuery,
+		Blake2_128Concat,
+		T::Hash,
+		Blake2_128Concat,
+		T::AccountId,
+		u64,
+		ValueQuery,
 	>;
+
+	// #[pallet::storage]
+    // pub(super) type SomeDoubleMap<T: Config> = StorageDoubleMap<_, Blake2_128Concat, u32, Blake2_128Concat, T::AccountId, u32, ValueQuery>;
+
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        // /helper fund
-		// fn calculate_hash<T: Hash>(t: &T) -> u64 {
-		// 	let mut s = DefaultHasher::new();
-		// 	t.hash(&mut s);
-		// 	s.finish()
-		// }
 
-		// #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        // pub fn my_transfer(origin: OriginFor<T>,  source: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
-        // let owner = ensure_signed(origin)?;
-        // match PalletDataStore::<T>::get() {
-        //   Some(destination) => {
-        //       T::Currency::transfer(&source, &destination, amount, ExistenceRequirement::KeepAlive)?;
-        //   },
-        //   None => return Err(Error::<T>::NoneValue.into()),
-        // };
-        //  Ok(())
-        //    }
 
         /// Upload File and sets its properties and updates storage.
 		#[pallet::weight(100)]
@@ -200,7 +207,7 @@ pub mod pallet {
 			file_type: Option<FileType>,
 			file_link: Vec<u8>,
 			allow_download :bool,
-            file_size: u32,
+            file_size: u64,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -211,23 +218,44 @@ pub mod pallet {
 	      			file_link.try_into().map_err(|()| Error::<T>::LinkTooLong)?;
 	        ensure!(bounded_file_link.len() >= T::MinLength::get() as usize, Error::<T>::LinkTooShort);
       
-            let new_cost: Option<BalanceOf<T>> = 
-	                 if file_size < 250 {
-	      			None
-	      		   } else {
-	      			cost.clone()
-	      		   };
+            //how to create const for whole pallet??
+			const ALLOWD_SIZE_FREE:u64 = 250;
+			const RATE_PER_UNIT:u64 = 5;
+
+			//calculate the price in u64 for demo purpose
+			let cost_in_u64:u64 =  if file_size <= ALLOWD_SIZE_FREE { 0 } else { 
+			(file_size - ALLOWD_SIZE_FREE) * RATE_PER_UNIT 			
+			};
+            // calculate the price to be paid to upload
+			let new_cost: Option<BalanceOf<T>> =  if file_size <= ALLOWD_SIZE_FREE { 
+				let cost_in_u64:u64 = 0; 
+				None //Some(0) 
+			} else { 
+				let cost_in_u64:u64 = (file_size - ALLOWD_SIZE_FREE) * RATE_PER_UNIT ;
+				// let c: <pallet::Pallet<T> as Currency<AccountId>>::Balance = price.try_into().unwrap();
+				// Some(c) 
+				cost.clone()
+			};
+
+			//create File data
+			let file = File::<T> {
+				price: new_cost,
+				file_type: file_type.unwrap_or_else(|| FileType::Normal),
+				owner: sender.clone(),
+				  file_link: bounded_file_link,
+				  allow_download,
+				  file_size,
+				};
+
+			// let cost1: T::Balance = 5.into();
+			// Check the buyer has enough free balance
+			ensure!(T::Currency::free_balance(&sender) >= cost.unwrap(), <Error<T>>::NotEnoughBalance);
+
 			// let dave: T::AccountId = hex_literal::hex!["5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"].into();
-			// T::Currency::transfer(&sender, &dave, cost.unwrap(), ExistenceRequirement::KeepAlive)?;
-            //create File data
-            let file = File::<T> {
-            price: new_cost,
-            file_type: file_type.unwrap_or_else(|| FileType::Normal),
-            owner: sender.clone(),
-	      	file_link: bounded_file_link,
-	      	allow_download,
-	      	file_size,
-            };
+			//how to import Deve's account ???
+			T::Currency::transfer(&sender, &sender , cost.unwrap(), ExistenceRequirement::KeepAlive)?;
+
+
 			//insert file
 	        <Files<T>>::insert(&cid, file);
 
@@ -240,11 +268,13 @@ pub mod pallet {
 	        <FilesOwned<T>>::insert(&cid, &sender);
       
             // Deposite file created event
+			Self::deposit_event(Event::CostToUser{cid, user: sender.clone(), cost: cost_in_u64});
             Self::deposit_event(Event::FileCreated { who: sender, cid });
-	      		Ok(())
+	      	Ok(())
 	    }
 
-    
+
+
 
         /// Download File .
 		#[pallet::weight(100)]
@@ -256,45 +286,67 @@ pub mod pallet {
 
 			// check if file exists
             ensure!(Files::<T>::contains_key(&cid), Error::<T>::FileDoesNotExist);
-            //check if file is downloadable
-			let is_allowed = <Files<T>>::get(&cid).unwrap().allow_download;
-	        ensure!(is_allowed, Error::<T>::FileNotDownloadable);
+
+			//get the file metadata
+			let file2download = <Files<T>>::get(&cid).unwrap();
+			let file_size = file2download.file_size;
+			let is_allowed = file2download.allow_download;
+
+			//check if file is downloadable
+			ensure!(is_allowed, Error::<T>::FileNotDownloadable);
+
+
+			const ALLOWD_SIZE_FREE:u64 = 250;
+			const RATE_PER_UNIT:u64 = 5;
+
+			//calculate the price in u64 for demo purpose
+			let cost_in_u64:u64 =  if file_size <= ALLOWD_SIZE_FREE  { 0 } 
+			else if file2download.file_type == FileType::Privileged {
+				// file2download.price   // actual return
+				1234   //dummy return in u64
+			} else { 
+			(file_size - ALLOWD_SIZE_FREE) * RATE_PER_UNIT 			
+			};
+
+			// // Check the buyer has enough free balance
+			// ensure!(T::Currency::free_balance(&sender) >= cost_in_u64, <Error<T>>::NotEnoughBalance);
+            //deduct the cost from sender account
+			//how to import Deve's account ???
+			// T::Currency::transfer(&sender, &sender, file2download.price.unwrap(), ExistenceRequirement::KeepAlive)?;
+
+
 			//increment the download count of individual files
 	        <FilesDownloadCnt<T>>::mutate(&cid, |x| {
 				let cnt = *x;
 				*x = cnt + 1; //Some(cnt + 1);
 			});   
 
+
+
 			//increment overall file download count
 			<TotalDownloadCount<T>>::mutate(|x| *x+=1 );
 
 			//trace downloader details
-			//check if file downloaded
-			// let mut has_str = sha2_256(sender.to_vec());
-			// has_str.push_str(sender.decode_into_raw_public_keys());
-			// has_str;
-			// let ifd:bool = <FileDownloaders<T>>::contains_key(&cid);
-			if 1 == 1 {
-				//if downloaded
-				// let downloader: T::AccountId = <FileDownloaders<T>>::get(&cid).unwrap()[0];
-				// //check if sender downloaded
-				// if sender == downloader {
-				// 	//update the count of downlodes
-				// 	<FileDownloaders<T>>::mutate(&cid, |x| {
-				// 		let cnt = *x[1];
+			//increment the number of downloads by file id and user
+			<FileDownloaders<T>>::mutate(&cid, &sender, |x| *x+=1);
 
-				// 	} )
-				// }
-			} else {
-				//file never downloaded so add the details
-				// <FileDownloaders<T>>::insert(&cid, (sender,1));
-			}
+			// check this out// get_account_id_from_seed::<sr25519::Public>("Alice")
+			// let Ali = get_account_id_from_seed::<sr25519::Public>("Alice");
+			// let dave: T::AccountId = hex_literal::hex!["5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"].into();
+			// let dave = "0x4fe89cb3af2e92453f9c0d3d2dfcb65cf2e26d7895718f8921894d20188b52f3";
+			// let av = T::AccountId::from_ss58check("5GukQt4gJW2XqzFwmm3RHa7x6sYuVcGhuhz72CN7oiBsgffx").unwrap();
 
+            // let cost: Currency::Balance = 100.into();
+			// let cost:BalanceOf<T> = 100.into();
+			// T::Currency::transfer(&sender, &sender, cost,  ExistenceRequirement::KeepAlive)?;
+			// T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 
             //get the count of download of the file
 			let cnt: u64 = <FilesDownloadCnt<T>>::get(&cid); 
             // Deposite file created event
+			Self::deposit_event(Event::CostToUser{cid, user: sender.clone(), cost: cost_in_u64});
             Self::deposit_event(Event::FileDownloaded{ cid, count: cnt });
+
 	      	Ok(())
 	    }
 
