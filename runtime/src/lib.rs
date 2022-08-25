@@ -22,6 +22,7 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+// use sp_core::crypto::{KeyTypeId, Ss58Codec};
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -148,6 +149,9 @@ parameter_types! {
 	pub const MaxLength:u32 = 50;
 	pub const MinLength:u32 = 5;
 	// pub const MaxLengthOwners:u32 = 9999;
+	// pub CharityDest: AccountId = AccountId::from_ss58check("5GukQt4gJW2XqzFwmm3RHa7x6sYuVcGhuhz72CN7oiBsgffx").unwrap();
+	// get_account_id_from_seed::<sr25519::Public>("Alice");
+
 }
 
 // Configure FRAME pallets to include in runtime.

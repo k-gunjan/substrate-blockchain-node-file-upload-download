@@ -27,6 +27,13 @@ pub mod pallet {
 	// use frame_support::traits::tokens::Balance;
     // pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 	use frame_system::Origin;
+	use frame_support::sp_runtime::traits::Zero;
+	use frame_support::sp_runtime::SaturatedConversion;
+	// use sp_core::crypto::Ss58Codec;
+	use sp_core::{sr25519};
+	use sp_core::ed25519;
+
+
 
   #[cfg(feature = "std")]
 	use frame_support::serde::{Deserialize, Serialize};
@@ -34,7 +41,7 @@ pub mod pallet {
 	type AccountOf<T> = <T as frame_system::Config>::AccountId;
 	type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-	type Balance = u32;
+	// type Balance = u32;
 
 
   // Struct for holding File information.
@@ -113,7 +120,7 @@ pub mod pallet {
 	///Event ownership changed
 	FileOwnerChanged {cid: T::Hash, new_owner: T::AccountId},
 	///display the cost to user in event 
-	CostToUser {cid: T::Hash, user: T::AccountId, cost: u64},
+	CostToUser {cid: T::Hash, user: T::AccountId, cost: BalanceOf<T>},
   }
   
   
@@ -227,15 +234,8 @@ pub mod pallet {
 			(file_size - ALLOWD_SIZE_FREE) * RATE_PER_UNIT 			
 			};
             // calculate the price to be paid to upload
-			let new_cost: Option<BalanceOf<T>> =  if file_size <= ALLOWD_SIZE_FREE { 
-				let cost_in_u64:u64 = 0; 
-				None //Some(0) 
-			} else { 
-				let cost_in_u64:u64 = (file_size - ALLOWD_SIZE_FREE) * RATE_PER_UNIT ;
-				// let c: <pallet::Pallet<T> as Currency<AccountId>>::Balance = price.try_into().unwrap();
-				// Some(c) 
-				cost.clone()
-			};
+			let new_cost: Option<BalanceOf<T>> = Some(cost_in_u64.saturated_into::<BalanceOf<T>>());
+
 
 			//create File data
 			let file = File::<T> {
@@ -247,13 +247,14 @@ pub mod pallet {
 				  file_size,
 				};
 
-			// let cost1: T::Balance = 5.into();
+			let cost1 = BalanceOf::<T>::zero();
+			let cost2: BalanceOf<T> = 1010u32.into();
 			// Check the buyer has enough free balance
-			ensure!(T::Currency::free_balance(&sender) >= cost.unwrap(), <Error<T>>::NotEnoughBalance);
+			ensure!(T::Currency::free_balance(&sender) >= new_cost.unwrap(), <Error<T>>::NotEnoughBalance);
 
 			// let dave: T::AccountId = hex_literal::hex!["5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"].into();
 			//how to import Deve's account ???
-			T::Currency::transfer(&sender, &sender , cost.unwrap(), ExistenceRequirement::KeepAlive)?;
+			T::Currency::transfer(&sender, &sender , new_cost.unwrap(), ExistenceRequirement::KeepAlive)?;
 
 
 			//insert file
@@ -268,7 +269,7 @@ pub mod pallet {
 	        <FilesOwned<T>>::insert(&cid, &sender);
       
             // Deposite file created event
-			Self::deposit_event(Event::CostToUser{cid, user: sender.clone(), cost: cost_in_u64});
+			Self::deposit_event(Event::CostToUser{cid, user: sender.clone(), cost: new_cost.unwrap()});
             Self::deposit_event(Event::FileCreated { who: sender, cid });
 	      	Ok(())
 	    }
@@ -300,19 +301,19 @@ pub mod pallet {
 			const RATE_PER_UNIT:u64 = 5;
 
 			//calculate the price in u64 for demo purpose
-			let cost_in_u64:u64 =  if file_size <= ALLOWD_SIZE_FREE  { 0 } 
+			let cost:BalanceOf<T> =  if file_size <= ALLOWD_SIZE_FREE  { 0u32.into() } 
 			else if file2download.file_type == FileType::Privileged {
-				// file2download.price   // actual return
-				1234   //dummy return in u64
+				file2download.price.unwrap()   // actual return 	// 1234   //dummy return in u64
 			} else { 
-			(file_size - ALLOWD_SIZE_FREE) * RATE_PER_UNIT 			
+			let f = (file_size - ALLOWD_SIZE_FREE) * RATE_PER_UNIT ;	
+			f.saturated_into::<BalanceOf<T>>()		
 			};
 
 			// // Check the buyer has enough free balance
-			// ensure!(T::Currency::free_balance(&sender) >= cost_in_u64, <Error<T>>::NotEnoughBalance);
+			ensure!(T::Currency::free_balance(&sender) >= cost, <Error<T>>::NotEnoughBalance);
             //deduct the cost from sender account
 			//how to import Deve's account ???
-			// T::Currency::transfer(&sender, &sender, file2download.price.unwrap(), ExistenceRequirement::KeepAlive)?;
+			T::Currency::transfer(&sender, &sender, cost, ExistenceRequirement::KeepAlive)?;
 
 
 			//increment the download count of individual files
@@ -322,6 +323,8 @@ pub mod pallet {
 			});   
 
 
+			// use sp_core::H256;
+			// use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId, Hashing};
 
 			//increment overall file download count
 			<TotalDownloadCount<T>>::mutate(|x| *x+=1 );
@@ -335,16 +338,17 @@ pub mod pallet {
 			// let dave: T::AccountId = hex_literal::hex!["5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"].into();
 			// let dave = "0x4fe89cb3af2e92453f9c0d3d2dfcb65cf2e26d7895718f8921894d20188b52f3";
 			// let av = T::AccountId::from_ss58check("5GukQt4gJW2XqzFwmm3RHa7x6sYuVcGhuhz72CN7oiBsgffx").unwrap();
+			// let de: T::AccountId = Public::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty").expect("Valid address");
+			// let de: T::AccountId = AccountId::from_h256(H256::from_low_u64_be(2));
+			let an: &[u8] = "5GukQt4gJW2XqzFwmm3RHa7x6sYuVcGhuhz72CN7oiBsgffx".as_bytes();
+			// let anc = an.saturated_into::<AccountOf<T>>();
+			// let account_bytes: [u8; 32] = sender.into();
 
-            // let cost: Currency::Balance = 100.into();
-			// let cost:BalanceOf<T> = 100.into();
-			// T::Currency::transfer(&sender, &sender, cost,  ExistenceRequirement::KeepAlive)?;
-			// T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 
             //get the count of download of the file
 			let cnt: u64 = <FilesDownloadCnt<T>>::get(&cid); 
             // Deposite file created event
-			Self::deposit_event(Event::CostToUser{cid, user: sender.clone(), cost: cost_in_u64});
+			Self::deposit_event(Event::CostToUser{cid, user: sender.clone(), cost: cost});
             Self::deposit_event(Event::FileDownloaded{ cid, count: cnt });
 
 	      	Ok(())
