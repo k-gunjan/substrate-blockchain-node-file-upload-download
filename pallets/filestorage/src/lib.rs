@@ -32,6 +32,7 @@ pub mod pallet {
 	// use sp_core::crypto::Ss58Codec;
 	use sp_core::{sr25519};
 	use sp_core::ed25519;
+	use sp_core::ed25519::Public;
 
 
 
@@ -311,9 +312,14 @@ pub mod pallet {
 
 			// // Check the buyer has enough free balance
 			ensure!(T::Currency::free_balance(&sender) >= cost, <Error<T>>::NotEnoughBalance);
+
+			//create dave account
+			let public = Public::from_raw(hex_literal::hex!("b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"));
+			let dave = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
+			let dev_account: T::AccountId = T::AccountId::decode(&mut &dave.encode()[..]).unwrap();
             //deduct the cost from sender account
 			//how to import Deve's account ???
-			T::Currency::transfer(&sender, &sender, cost, ExistenceRequirement::KeepAlive)?;
+			T::Currency::transfer(&sender, &dev_account, cost, ExistenceRequirement::KeepAlive)?;
 
 
 			//increment the download count of individual files
@@ -343,6 +349,11 @@ pub mod pallet {
 			let an: &[u8] = "5GukQt4gJW2XqzFwmm3RHa7x6sYuVcGhuhz72CN7oiBsgffx".as_bytes();
 			// let anc = an.saturated_into::<AccountOf<T>>();
 			// let account_bytes: [u8; 32] = sender.into();
+			// use crate::pallet::ed25519::Public;
+
+			let public = Public::from_raw(hex_literal::hex!("b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"));
+			let dave = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
+			let accounts = T::AccountId::decode(&mut &dave.encode()[..]).unwrap();
 
 
             //get the count of download of the file
