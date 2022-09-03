@@ -22,6 +22,7 @@ pub mod pallet {
 		blake2_128,
 		sha2_256
 	};
+	use sp_core::{crypto::AccountId32, sr25519};
 	// use url::Url;
 	use hex_literal;
 	// use frame_support::traits::tokens::Balance;
@@ -29,11 +30,13 @@ pub mod pallet {
 	use frame_system::Origin;
 	use frame_support::sp_runtime::traits::Zero;
 	use frame_support::sp_runtime::SaturatedConversion;
-	// use sp_core::crypto::Ss58Codec;
-	use sp_core::{sr25519};
 	use sp_core::ed25519;
 	use sp_core::ed25519::Public;
+	use sp_runtime::traits::{AccountIdLookup, AccountIdConversion};
+	use frame_support::sp_std::borrow::ToOwned;
 
+    // use sp_core::crypto::{KeyTypeId, Ss58Codec};
+	use sp_core::sr25519::Signature;
 
 
   #[cfg(feature = "std")]
@@ -43,6 +46,7 @@ pub mod pallet {
 	type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 	// type Balance = u32;
+
 
 
   // Struct for holding File information.
@@ -77,6 +81,8 @@ pub mod pallet {
     /// Because this pallet emits events, it depends on the runtime's definition of an event.
     type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+	type AccountId1: From<sr25519::Public> + IsType<<Self as frame_system::Config>::AccountId>;
+	
     /// The Currency handler for the FileStorage pallet.
 	type Currency: Currency<Self::AccountId>;
 
@@ -90,6 +96,7 @@ pub mod pallet {
 	/// The maximum length a file_link may be.
 	#[pallet::constant]
 	type MaxLength: Get<u32>;
+
 
 	// type Balance = u32;
 
@@ -228,7 +235,7 @@ pub mod pallet {
       
             //how to create const for whole pallet??
 			const ALLOWD_SIZE_FREE:u64 = 250;
-			const RATE_PER_UNIT:u64 = 5;
+			const RATE_PER_UNIT:u64 = 100000000000;
 
 			//calculate the price in u64 for demo purpose
 			let cost_in_u64:u64 =  if file_size <= ALLOWD_SIZE_FREE { 0 } else { 
@@ -248,14 +255,16 @@ pub mod pallet {
 				  file_size,
 				};
 
-			let cost1 = BalanceOf::<T>::zero();
-			let cost2: BalanceOf<T> = 1010u32.into();
+			// let cost1 = BalanceOf::<T>::zero();
+			// let cost2: BalanceOf<T> = 1010u32.into();
 			// Check the buyer has enough free balance
 			ensure!(T::Currency::free_balance(&sender) >= new_cost.unwrap(), <Error<T>>::NotEnoughBalance);
 
 			// let dave: T::AccountId = hex_literal::hex!["5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"].into();
-			//how to import Deve's account ???
-			T::Currency::transfer(&sender, &sender , new_cost.unwrap(), ExistenceRequirement::KeepAlive)?;
+			let dave32 = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
+			let dave = T::AccountId::decode(&mut &dave32.encode()[..]).unwrap();
+
+			T::Currency::transfer(&sender, &dave , new_cost.unwrap(), ExistenceRequirement::KeepAlive)?;
 
 
 			//insert file
@@ -299,7 +308,7 @@ pub mod pallet {
 
 
 			const ALLOWD_SIZE_FREE:u64 = 250;
-			const RATE_PER_UNIT:u64 = 5;
+			const RATE_PER_UNIT:u64 = 10000000000;
 
 			//calculate the price in u64 for demo purpose
 			let cost:BalanceOf<T> =  if file_size <= ALLOWD_SIZE_FREE  { 0u32.into() } 
@@ -314,13 +323,58 @@ pub mod pallet {
 			ensure!(T::Currency::free_balance(&sender) >= cost, <Error<T>>::NotEnoughBalance);
 
 			//create dave account
+			
+			
 			let public = Public::from_raw(hex_literal::hex!("b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"));
-			let dave = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
-			let dev_account: T::AccountId = T::AccountId::decode(&mut &dave.encode()[..]).unwrap();
+			// let dave: AccountId32 = AccountId32::from_ss58check("5CeDzfWZ6N8D695eTpwUwCDGKQeJsNWYV14AXTZiEt2HuDfX").unwrap();
+			// let dave = Signature::from_slice(b"5CeDzfWZ6N8D695eTpwUwCDGKQeJsNWYV14AXTZiEt2HuDfX").unwrap();
+			let davepkey = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+			let dave32 = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
+            			// 5GQisg84mMfot9yukAtTbTc6Sw4Qxm49gt6WzLwdy4DeUnFt
+			// let dave = T::AccountId::decode(&mut &dave32.encode()[..]).unwrap();
+			
+			// balances:Transfer
+			// ["5HpG9w8EBLe5XCrbczpwq5TSXvedjrBGCwqxK1iQ7qUsSWFc","5GQisg84mMfot9yukAtTbTc6Sw4Qxm49gt6WzLwdy4DeUnFt","100,000,000,000"]
+
+			// let dev_account: T::AccountId = <T as frame_system::Config>::AccountId::from_str("5E9qirdixDapJ4Z4JBZD4cpcR65NNbUbW4ScaXdrjLEVcScZ").unwrap();
+			
+			// <T as frame_system::Config>::AccountId::
+			// let user11: AccountId = get_a_user();
+            // let user_lookup = <T::Lookup as sp_runtime::traits::StaticLookup>::unlookup(user11.clone());
             //deduct the cost from sender account
 			//how to import Deve's account ???
-			T::Currency::transfer(&sender, &dev_account, cost, ExistenceRequirement::KeepAlive)?;
+			// let asrpkey1 = "0x109bfade30a1c818cba4105c494cd1e409e2a6942b96ba3098145e769d4ebb38";
+			// let asrpkey = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";  //alice
+			// let aliceBytes: Vec<u8> = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d".as_bytes().try_into().unwrap();  //alice
+			// let dave = T::AccountId::decode(&mut &asrpkey.encode()[..]).unwrap();
+			// // let dasb: [u8;32] =  "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy".as_bytes().into().unwrap();
+			// let srp: sr25519::Public =  sr25519::Public::from_raw(dasb) ;
+			// use sp_runtime::traits::IdentifyAccount;
+			// let dave1: T::AccountId1 = srp.into();
+			// // let dave2 = T::AccountId::decode(&mut &dasb[..]).unwrap();
 
+			
+			// // use sp_core::crypto::Ss58AddressFormat;
+			// // let an: u128 = 86298139;
+			// // cost = an.saturated_into::<BalanceOf<T>>();
+			// // let an5:T::AccountId1 = asrpkey.into();
+			// T::Currency::transfer(&sender, &dave1.into(), cost, ExistenceRequirement::AllowDeath)?;
+
+
+			// Secret phrase:       truth fly general excite barrel squirrel they envelope finger pig shop guitar
+            // Network ID:        substrate
+            // Secret seed:       0x9b18319ca53df3323f4a957209ae9bb9ffece9b003b1fd71488775df30222c9f
+            // Public key (hex):  0x19908d2aafbe728505561af84555f0d1e242d1d08d5da0afabfb435254a628c3
+            // Account ID:        0x19908d2aafbe728505561af84555f0d1e242d1d08d5da0afabfb435254a628c3
+            // Public key (SS58): 5CeDzfWZ6N8D695eTpwUwCDGKQeJsNWYV14AXTZiEt2HuDfX
+            // SS58 Address:      5CeDzfWZ6N8D695eTpwUwCDGKQeJsNWYV14AXTZiEt2HuDfX
+
+			// get_account_id_from_seed::<sr25519::Public>("Dave")
+
+			let dave32 = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
+			let dave = T::AccountId::decode(&mut &dave32.encode()[..]).unwrap();
+
+			T::Currency::transfer(&sender, &dave , cost, ExistenceRequirement::KeepAlive)?;
 
 			//increment the download count of individual files
 	        <FilesDownloadCnt<T>>::mutate(&cid, |x| {
@@ -351,9 +405,9 @@ pub mod pallet {
 			// let account_bytes: [u8; 32] = sender.into();
 			// use crate::pallet::ed25519::Public;
 
-			let public = Public::from_raw(hex_literal::hex!("b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"));
-			let dave = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
-			let accounts = T::AccountId::decode(&mut &dave.encode()[..]).unwrap();
+			// let public = Public::from_raw(hex_literal::hex!("b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"));
+			// let dave = "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy";
+			// let accounts = T::AccountId::decode(&mut &dave.encode()[..]).unwrap();
 
 
             //get the count of download of the file

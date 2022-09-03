@@ -59,6 +59,7 @@ pub type Signature = MultiSignature;
 /// to the public key of our transaction signing scheme.
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
+
 /// Balance of an account.
 pub type Balance = u128;
 
@@ -288,7 +289,9 @@ impl pallet_file_storage::Config for Runtime {
 	type MaxFileOwned = MaxFileOwned;
 	type MaxLength = MaxLength;
 	type MinLength = MinLength;
+	type AccountId1 = AccountId;
 	// type MaxLengthOwners: MaxLengthOwners;
+	
 
 }
 
